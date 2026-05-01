@@ -41,7 +41,21 @@ REQUIRED_GROUP_2 = "@ecllogs"
 LOG_CHANNEL = -1003708644771
 
 # Store registered users
-registered_users = set()
+import json
+
+USERS_FILE = "registered_users.json"
+
+# Load registered users
+try:
+    with open(USERS_FILE, "r") as file:
+        registered_users = set(json.load(file))
+except:
+    registered_users = set()
+
+# Save registered users
+def save_users():
+    with open(USERS_FILE, "w") as file:
+        json.dump(list(registered_users), file)
 
 
 # =========================
@@ -235,6 +249,7 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Save registered user
     registered_users.add(user.id)
+    save_users()
 
     username = (
         f"@{user.username}"
