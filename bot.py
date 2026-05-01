@@ -110,7 +110,11 @@ async def send_join_message(message):
         "👋 Hi ! welcome to the ECL registration bot kindly join this two channel to continue and /start .",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
-
+async def show_json(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_document(
+        chat_id=update.effective_chat.id,
+        document=open("registered_users.json", "rb")
+    )
 
 # =========================
 # SHOW ROLE BUTTONS
@@ -304,6 +308,7 @@ app.add_handler(
         pattern="^(Bowler|Batter|All Rounder)$"
     )
 )
+app.add_handler(CommandHandler("showjson", show_json))
 
 print("🏏 ECL BOT RUNNING...")
 
