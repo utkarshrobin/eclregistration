@@ -1,5 +1,8 @@
 import os
 import json
+import threading
+
+from flask import Flask
 
 from telegram import (
     Update,
@@ -18,20 +21,28 @@ from telegram.ext import (
 # CONFIG
 # =========================
 
-BOT_TOKEN = "8688993454:AAEZNTQ4-fb8irVzUCGFIyYESvDABkCxMOI"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# REQUIRED CHANNEL/GROUP IDS
-# Replace REQUIRED_GROUP_1 with your real @eclplays ID
-REQUIRED_GROUP_1 = -1001234567890
-
-# ECL LOGS CHANNEL ID
+REQUIRED_GROUP_1 = -1003752945686
 REQUIRED_GROUP_2 = -1003708644771
 
-# LOG CHANNEL
 LOG_CHANNEL = -1003708644771
 
-# JSON FILE
 USERS_FILE = "registered_users.json"
+
+# =========================
+# FLASK SERVER
+# =========================
+
+web_app = Flask(__name__)
+
+@web_app.route("/")
+def home():
+    return "ECL Bot Running!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
 
 # =========================
 # LOAD USERS
@@ -59,15 +70,9 @@ def save_users():
 async def is_user_joined(bot, chat_id, user_id):
 
     try:
-        member = await bot.get_chat_member(
-            chat_id,
-            user_id
-        )
+        member = await bot.get_chat_member(chat_id, user_id)
 
-        return member.status not in [
-            "left",
-            "kicked"
-        ]
+        return member.status not in ["left", "kicked"]
 
     except Exception as e:
         print(e)
@@ -146,7 +151,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
 
-    # Already registered
     if user.id in registered_users:
 
         await update.message.reply_text(
@@ -155,7 +159,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
-    # Check joins
     joined_group = await is_user_joined(
         context.bot,
         REQUIRED_GROUP_1,
@@ -168,17 +171,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user.id
     )
 
-    # Not joined
     if not joined_group or not joined_logs:
 
         await send_join_message(update.message)
         return
 
-    # Show role selection
     await show_role_buttons(update.message)
 
 # =========================
-# TRY AGAIN
+# CHECK JOIN
 # =========================
 
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -188,7 +189,6 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = query.from_user
 
-    # Already registered
     if user.id in registered_users:
 
         await query.message.reply_text(
@@ -197,7 +197,6 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
-    # Check joins
     joined_group = await is_user_joined(
         context.bot,
         REQUIRED_GROUP_1,
@@ -210,13 +209,11 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user.id
     )
 
-    # Still not joined
     if not joined_group or not joined_logs:
 
         await send_join_message(query.message)
         return
 
-    # Verified
     await show_role_buttons(query.message)
 
 # =========================
@@ -231,7 +228,6 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     role = query.data
 
-    # Prevent duplicate registration
     if user.id in registered_users:
 
         await query.message.reply_text(
@@ -240,14 +236,13 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
-    # Save user
     registered_users.add(user.id)
     save_users()
 
     username = (
         f"@{user.username}"
         if user.username
-        else "@none"
+        else "No Username"
     )
 
     log_message = f"""
@@ -262,13 +257,15 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🆔 User ID: {user.id}
 """
 
-    # Send log
-    await context.bot.send_message(
-        chat_id=LOG_CHANNEL,
-        text=log_message
-    )
+    try:
+        await context.bot.send_message(
+            chat_id=LOG_CHANNEL,
+            text=log_message
+        )
 
-    # Success message
+    except Exception as e:
+        print(e)
+
     await query.message.reply_text(
         "✅🏏 Registration successful!\n\n"
         "📢 Check your registration at @ecllogs"
@@ -297,32 +294,40 @@ async def show_json(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MAIN
 # =========================
 
-app = ApplicationBuilder().token(
-    BOT_TOKEN
-).build()
+def main():
 
-app.add_handler(
-    CommandHandler("start", start)
-)
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-app.add_handler(
-    CommandHandler("showjson", show_json)
-)
-
-app.add_handler(
-    CallbackQueryHandler(
-        check_join,
-        pattern="check_join"
+    app.add_handler(
+        CommandHandler("start", start)
     )
-)
 
-app.add_handler(
-    CallbackQueryHandler(
-        role_selected,
-        pattern="^(Bowler|Batter|All Rounder)$"
+    app.add_handler(
+        CommandHandler("showjson", show_json)
     )
-)
 
-print("🏏 ECL BOT RUNNING...")
+    app.add_handler(
+        CallbackQueryHandler(
+            check_join,
+            pattern="check_join"
+        )
+    )
 
-app.run_polling()
+    app.add_handler(
+        CallbackQueryHandler(
+            role_selected,
+            pattern="^(Bowler|Batter|All Rounder)$"
+        )
+    )
+
+    print("🏏 ECL BOT RUNNING...")
+
+    app.run_polling()
+
+# =========================
+# START BOTH
+# =========================
+
+threading.Thread(target=run_web).start()
+
+main()
