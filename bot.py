@@ -1,3 +1,20 @@
+from flask import Flask
+from threading import Thread
+import os
+
+app_web = Flask('')
+
+@app_web.route('/')
+def home():
+    return "Bot is running!"
+
+def run_web():
+    app_web.run(
+        host='0.0.0.0',
+        port=int(os.environ.get("PORT", 10000))
+    )
+
+Thread(target=run_web).start()
 import os
 import json
 import threading
