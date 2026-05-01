@@ -1,20 +1,3 @@
-from flask import Flask
-from threading import Thread
-import os
-
-app_web = Flask('')
-
-@app_web.route('/')
-def home():
-    return "Bot is running!"
-
-def run_web():
-    app_web.run(
-        host='0.0.0.0',
-        port=int(os.environ.get("PORT", 10000))
-    )
-
-Thread(target=run_web).start()
 import os
 import json
 import threading
@@ -44,6 +27,7 @@ REQUIRED_GROUP_1 = -1003752945686
 REQUIRED_GROUP_2 = -1003708644771
 
 LOG_CHANNEL = -1003708644771
+
 # BLOCKED USERS
 BLOCKED_USERS = {
     8715820928,
@@ -77,7 +61,10 @@ def home():
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    web_app.run(host="0.0.0.0", port=port)
+    web_app.run(
+        host="0.0.0.0",
+        port=port
+    )
 
 # =========================
 # LOAD USERS
@@ -105,9 +92,15 @@ def save_users():
 async def is_user_joined(bot, chat_id, user_id):
 
     try:
-        member = await bot.get_chat_member(chat_id, user_id)
+        member = await bot.get_chat_member(
+            chat_id,
+            user_id
+        )
 
-        return member.status not in ["left", "kicked"]
+        return member.status not in [
+            "left",
+            "kicked"
+        ]
 
     except Exception as e:
         print(e)
@@ -185,15 +178,17 @@ async def show_role_buttons(message):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
-    # Blocked users
-if user.id in BLOCKED_USERS:
 
-    await update.message.reply_text(
-        "✅ You have already registered."
-    )
+    # BLOCKED USERS
+    if user.id in BLOCKED_USERS:
 
-    return
+        await update.message.reply_text(
+            "✅ You have already registered."
+        )
 
+        return
+
+    # ALREADY REGISTERED
     if user.id in registered_users:
 
         await update.message.reply_text(
@@ -202,6 +197,7 @@ if user.id in BLOCKED_USERS:
 
         return
 
+    # CHECK JOINED
     joined_group = await is_user_joined(
         context.bot,
         REQUIRED_GROUP_1,
@@ -214,15 +210,17 @@ if user.id in BLOCKED_USERS:
         user.id
     )
 
+    # NOT JOINED
     if not joined_group or not joined_logs:
 
         await send_join_message(update.message)
         return
 
+    # SHOW ROLES
     await show_role_buttons(update.message)
 
 # =========================
-# CHECK JOIN
+# TRY AGAIN
 # =========================
 
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -231,15 +229,17 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     user = query.from_user
-    # Blocked users
-if user.id in BLOCKED_USERS:
 
-    await query.message.reply_text(
-        "✅ You have already registered."
-    )
+    # BLOCKED USERS
+    if user.id in BLOCKED_USERS:
 
-    return
+        await query.message.reply_text(
+            "✅ You have already registered."
+        )
 
+        return
+
+    # ALREADY REGISTERED
     if user.id in registered_users:
 
         await query.message.reply_text(
@@ -248,6 +248,7 @@ if user.id in BLOCKED_USERS:
 
         return
 
+    # CHECK JOINED
     joined_group = await is_user_joined(
         context.bot,
         REQUIRED_GROUP_1,
@@ -260,11 +261,13 @@ if user.id in BLOCKED_USERS:
         user.id
     )
 
+    # NOT JOINED
     if not joined_group or not joined_logs:
 
         await send_join_message(query.message)
         return
 
+    # VERIFIED
     await show_role_buttons(query.message)
 
 # =========================
@@ -279,6 +282,7 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     role = query.data
 
+    # PREVENT DUPLICATE
     if user.id in registered_users:
 
         await query.message.reply_text(
@@ -287,6 +291,7 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # SAVE USER
     registered_users.add(user.id)
     save_users()
 
@@ -308,7 +313,9 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🆔 User ID: {user.id}
 """
 
+    # SEND LOG
     try:
+
         await context.bot.send_message(
             chat_id=LOG_CHANNEL,
             text=log_message
@@ -317,6 +324,7 @@ async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(e)
 
+    # SUCCESS
     await query.message.reply_text(
         "✅🏏 Registration successful!\n\n"
         "📢 Check your registration at @ecllogs"
@@ -347,7 +355,9 @@ async def show_json(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(
+        BOT_TOKEN
+    ).build()
 
     app.add_handler(
         CommandHandler("start", start)
