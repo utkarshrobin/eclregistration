@@ -44,6 +44,24 @@ REQUIRED_GROUP_1 = -1003752945686
 REQUIRED_GROUP_2 = -1003708644771
 
 LOG_CHANNEL = -1003708644771
+# BLOCKED USERS
+BLOCKED_USERS = {
+    8715820928,
+    994137349,
+    8506350117,
+    8799701191,
+    8633597738,
+    5195469835,
+    8000127916,
+    8059940397,
+    8182255725,
+    1513008366,
+    8400610730,
+    8722613907,
+    6257559189,
+    7163963350,
+    7558715645
+}
 
 USERS_FILE = "registered_users.json"
 
@@ -167,6 +185,14 @@ async def show_role_buttons(message):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
+    # Blocked users
+if user.id in BLOCKED_USERS:
+
+    await update.message.reply_text(
+        "✅ You have already registered."
+    )
+
+    return
 
     if user.id in registered_users:
 
@@ -205,6 +231,14 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     user = query.from_user
+    # Blocked users
+if user.id in BLOCKED_USERS:
+
+    await query.message.reply_text(
+        "✅ You have already registered."
+    )
+
+    return
 
     if user.id in registered_users:
 
