@@ -1,394 +1,132 @@
-import os
-import json
-import threading
-
-from flask import Flask
-
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
-
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-)
+from pyrogram import Client, filters
+from pyrogram.errors import RPCError
+import asyncio
 
 # =========================
 # CONFIG
 # =========================
+API_ID = 31383535
+API_HASH = "4d5fede55dedce694a86391c23b31eb5"
+BOT_TOKEN = "8688993454:AAEZNTQ4-fb8irVzUCGFIyYESvDABkCxMOI"
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-
-REQUIRED_GROUP_1 = -1003752945686
-REQUIRED_GROUP_2 = -1003708644771
-
-LOG_CHANNEL = -1003708644771
-
-# BLOCKED USERS
-BLOCKED_USERS = {
-    8715820928,
-    994137349,
-    8506350117,
-    8799701191,
-    8633597738,
-    5195469835,
-    8000127916,
-    8059940397,
-    8182255725,
-    1513008366,
-    8400610730,
-    8722613907,
-    6257559189,
-    7163963350,
-    7558715645
-}
-
-USERS_FILE = "registered_users.json"
+USERS_FILE = "cleaned_registered_users.txt"
 
 # =========================
-# FLASK SERVER
+# BOT START
 # =========================
-
-web_app = Flask(__name__)
-
-@web_app.route("/")
-def home():
-    return "ECL Bot Running!"
-
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    web_app.run(
-        host="0.0.0.0",
-        port=port
-    )
+app = Client(
+    "GiveSetsBot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
+)
 
 # =========================
-# LOAD USERS
+# READ IDS
 # =========================
+def load_user_ids():
+    ids = []
 
-try:
-    with open(USERS_FILE, "r") as file:
-        registered_users = set(json.load(file))
+    with open(USERS_FILE, "r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
 
-except:
-    registered_users = set()
+            if line.isdigit():
+                ids.append(int(line))
 
-# =========================
-# SAVE USERS
-# =========================
+    return ids
 
-def save_users():
-    with open(USERS_FILE, "w") as file:
-        json.dump(list(registered_users), file)
 
 # =========================
-# CHECK JOIN
+# FORMAT USER DATA
 # =========================
+def format_user_data(user):
+    data = []
 
-async def is_user_joined(bot, chat_id, user_id):
+    if user.first_name:
+        data.append(f"First Name: {user.first_name}")
 
-    try:
-        member = await bot.get_chat_member(
-            chat_id,
-            user_id
-        )
+    if user.username:
+        data.append(f"Username: @{user.username}")
 
-        return member.status not in [
-            "left",
-            "kicked"
-        ]
+    data.append(f"ID: {user.id}")
 
-    except Exception as e:
-        print(e)
-        return False
+    return " | ".join(data)
+
 
 # =========================
-# JOIN MESSAGE
+# /givesets COMMAND
 # =========================
+@app.on_message(filters.command("givesets"))
+async def give_sets(client, message):
 
-async def send_join_message(message):
+    await message.reply_text("Started fetching users...")
 
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "🏏 JOIN CRIC GC",
-                url="https://t.me/eclplays"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "📢 JOIN LOG CHANNEL",
-                url="https://t.me/ecllogs"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "✅ TRY AGAIN",
-                callback_data="check_join"
-            )
-        ]
-    ]
+    user_ids = load_user_ids()
 
-    await message.reply_text(
-        "👋 Hi! Welcome to the ECL registration bot.\n\n"
-        "Kindly join these two channels/groups to continue.",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    valid_users = []
+    no_data_users = []
 
-# =========================
-# ROLE BUTTONS
-# =========================
+    # =========================
+    # FETCH USERS
+    # =========================
+    for uid in user_ids:
 
-async def show_role_buttons(message):
+        try:
+            user = await client.get_users(uid)
 
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "🎯 Bowler",
-                callback_data="Bowler"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🏏 Batter",
-                callback_data="Batter"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🔥 All Rounder",
-                callback_data="All Rounder"
-            )
-        ]
-    ]
+            valid_users.append(format_user_data(user))
 
-    await message.reply_text(
-        "🏏 Select your role 👇",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        except RPCError:
+            no_data_users.append(uid)
 
-# =========================
-# /START
-# =========================
+        except Exception:
+            no_data_users.append(uid)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await asyncio.sleep(0.2)
 
-    user = update.effective_user
+    # =========================
+    # SEND VALID USER SETS
+    # =========================
+    set_number = 1
 
-    # BLOCKED USERS
-    if user.id in BLOCKED_USERS:
+    for i in range(0, len(valid_users), 10):
 
-        await update.message.reply_text(
-            "✅ You have already registered."
-        )
+        chunk = valid_users[i:i + 10]
 
-        return
+        text = f"Set-{set_number}\n\n"
 
-    # ALREADY REGISTERED
-    if user.id in registered_users:
+        for user_data in chunk:
+            text += f"{user_data}\n\n"
 
-        await update.message.reply_text(
-            "✅ You have already registered in ECL."
-        )
+        await message.reply_text(text)
 
-        return
+        set_number += 1
 
-    # CHECK JOINED
-    joined_group = await is_user_joined(
-        context.bot,
-        REQUIRED_GROUP_1,
-        user.id
-    )
+    # =========================
+    # SEND NO DATA SET
+    # =========================
+    if no_data_users:
 
-    joined_logs = await is_user_joined(
-        context.bot,
-        REQUIRED_GROUP_2,
-        user.id
-    )
+        no_data_set = 1
 
-    # NOT JOINED
-    if not joined_group or not joined_logs:
+        for i in range(0, len(no_data_users), 10):
 
-        await send_join_message(update.message)
-        return
+            chunk = no_data_users[i:i + 10]
 
-    # SHOW ROLES
-    await show_role_buttons(update.message)
+            text = f"No Data Set-{no_data_set}\n\n"
+
+            for uid in chunk:
+                text += f"ID: {uid}\n"
+
+            await message.reply_text(text)
+
+            no_data_set += 1
+
+    await message.reply_text("Finished sending all sets.")
+
 
 # =========================
-# TRY AGAIN
+# RUN BOT
 # =========================
-
-async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    user = query.from_user
-
-    # BLOCKED USERS
-    if user.id in BLOCKED_USERS:
-
-        await query.message.reply_text(
-            "✅ You have already registered."
-        )
-
-        return
-
-    # ALREADY REGISTERED
-    if user.id in registered_users:
-
-        await query.message.reply_text(
-            "✅ You have already registered in ECL."
-        )
-
-        return
-
-    # CHECK JOINED
-    joined_group = await is_user_joined(
-        context.bot,
-        REQUIRED_GROUP_1,
-        user.id
-    )
-
-    joined_logs = await is_user_joined(
-        context.bot,
-        REQUIRED_GROUP_2,
-        user.id
-    )
-
-    # NOT JOINED
-    if not joined_group or not joined_logs:
-
-        await send_join_message(query.message)
-        return
-
-    # VERIFIED
-    await show_role_buttons(query.message)
-
-# =========================
-# ROLE SELECTED
-# =========================
-
-async def role_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    user = query.from_user
-    role = query.data
-
-    # PREVENT DUPLICATE
-    if user.id in registered_users:
-
-        await query.message.reply_text(
-            "✅ You have already registered."
-        )
-
-        return
-
-    # SAVE USER
-    registered_users.add(user.id)
-    save_users()
-
-    username = (
-        f"@{user.username}"
-        if user.username
-        else "No Username"
-    )
-
-    log_message = f"""
-🏏 NEW PLAYER ENTRY
-
-👤 Name: {user.first_name}
-
-📛 Username: {username}
-
-🎯 Role: {role}
-
-🆔 User ID: {user.id}
-"""
-
-    # SEND LOG
-    try:
-
-        await context.bot.send_message(
-            chat_id=LOG_CHANNEL,
-            text=log_message
-        )
-
-    except Exception as e:
-        print(e)
-
-    # SUCCESS
-    await query.message.reply_text(
-        "✅🏏 Registration successful!\n\n"
-        "📢 Check your registration at @ecllogs"
-    )
-
-# =========================
-# SHOW JSON
-# =========================
-
-async def show_json(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if not os.path.exists(USERS_FILE):
-
-        await update.message.reply_text(
-            "❌ No registered users yet."
-        )
-
-        return
-
-    await context.bot.send_document(
-        chat_id=update.effective_chat.id,
-        document=open(USERS_FILE, "rb")
-    )
-
-# =========================
-# MAIN
-# =========================
-
-def main():
-
-    app = ApplicationBuilder().token(
-        BOT_TOKEN
-    ).build()
-
-    app.add_handler(
-        CommandHandler("start", start)
-    )
-
-    app.add_handler(
-        CommandHandler("showjson", show_json)
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
-            check_join,
-            pattern="check_join"
-        )
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
-            role_selected,
-            pattern="^(Bowler|Batter|All Rounder)$"
-        )
-    )
-
-    print("🏏 ECL BOT RUNNING...")
-
-    app.run_polling()
-
-# =========================
-# START BOTH
-# =========================
-
-threading.Thread(target=run_web).start()
-
-main()
+app.run()
